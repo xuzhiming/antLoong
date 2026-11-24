@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dragon 3D Studio · Interactive Web Preview</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23b29cff' stroke='%2340f4ff' stroke-width='2'/></svg>" />
+  <link rel="stylesheet" href="./style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- Loading Overlay -->
+  <div id="loader-overlay">
+    <div class="loader-card">
+      <div class="cyber-spinner"></div>
+      <div id="loader-title" class="loader-title">LOADING CRYSTAL DRAGON</div>
+      <div class="loader-bar-track">
+        <div id="loader-bar-fill"></div>
+      </div>
+      <div id="loader-percent">0%</div>
+    </div>
+  </div>
+
+  <!-- Error Banner -->
+  <div id="error-banner" class="hidden">
+    <span id="error-text"></span>
+    <button id="error-close" type="button" aria-label="Close">×</button>
+  </div>
+
+  <!-- Top-Left Title, Stats & Model Switcher -->
+  <header class="hud-badge">
+    <div class="badge-header">
+      <span class="pulse-dot"></span>
+      <h1 id="hud-title">CRYSTAL DRAGON</h1>
+      <span class="tag">3D VIEWER</span>
+    </div>
+    <p id="mesh-stats" class="badge-stats">12 Parts · Loading...</p>
+    <div id="model-switcher" class="model-switcher" role="group" aria-label="Select Dragon Model">
+      <button type="button" class="model-btn active" data-model="crystal">Crystal Dragon</button>
+      <button type="button" class="model-btn" data-model="cyberpunk">Cyberpunk Dragon</button>
+    </div>
+  </header>
+
+  <!-- Top-Right Collapsible Control Panel -->
+  <aside id="controls-panel" class="glass-panel">
+    <div class="panel-header">
+      <span class="panel-title">SCENE CONTROLS</span>
+      <button id="toggle-panel-btn" type="button" title="Toggle Controls">Collapse</button>
+    </div>
+    <div id="panel-body" class="panel-body">
+      <section class="control-group">
+        <label class="group-label">Lighting Preset</label>
+        <div class="segmented-row" id="lighting-presets">
+          <button type="button" class="seg-btn active" data-preset="cyberpunk">Obsidian</button>
+          <button type="button" class="seg-btn" data-preset="studio">Studio</button>
+          <button type="button" class="seg-btn" data-preset="dark_rim">Dark Rim</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <div class="slider-row">
+          <label for="bloom-slider">Neon Bloom</label>
+          <span id="bloom-val" class="val-readout">0.22</span>
+        </div>
+        <input id="bloom-slider" type="range" min="0" max="1.2" step="0.02" value="0.22" />
+
+        <div class="slider-row">
+          <label for="exposure-slider">Exposure</label>
+          <span id="exposure-val" class="val-readout">1.10</span>
+        </div>
+        <input id="exposure-slider" type="range" min="0.6" max="2.0" step="0.05" value="1.10" />
+      </section>
+
+      <section class="control-group toggle-grid">
+        <button id="btn-autorotate" type="button" class="toggle-chip">Auto-Rotate</button>
+        <button id="btn-wireframe" type="button" class="toggle-chip">Wireframe</button>
+        <button id="btn-grid" type="button" class="toggle-chip active">Floor Grid</button>
+        <button id="btn-reference" type="button" class="toggle-chip">6-View Ref</button>
+      </section>
+
+      <section class="control-group">
+        <label class="group-label">Part Visibility</label>
+        <div id="part-checks" class="part-checks"></div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Bottom Camera View Pill Bar -->
+  <nav class="camera-bar glass-panel" aria-label="Camera Presets">
+    <button type="button" class="cam-btn active" data-view="hero">Hero <kbd>1</kbd></button>
+    <button type="button" class="cam-btn" data-view="head">Head <kbd>2</kbd></button>
+    <button type="button" class="cam-btn" data-view="front">Front <kbd>3</kbd></button>
+    <button type="button" class="cam-btn" data-view="rear">Rear <kbd>4</kbd></button>
+    <button type="button" class="cam-btn" data-view="left">Left <kbd>5</kbd></button>
+    <button type="button" class="cam-btn" data-view="right">Right <kbd>6</kbd></button>
+    <button type="button" class="cam-btn" data-view="top">Top <kbd>7</kbd></button>
+    <button type="button" class="cam-btn" data-view="bottom">Bottom <kbd>8</kbd></button>
+    <span class="divider"></span>
+    <button type="button" id="btn-reset" class="cam-btn reset-btn" title="Reset Camera (R)">Reset <kbd>R</kbd></button>
+  </nav>
+
+  <!-- Draggable Reference 6-View Overlay Card -->
+  <div id="ref-modal" class="ref-modal glass-panel hidden">
+    <div id="ref-modal-header" class="ref-modal-header">
+      <span>REFERENCE 6-VIEW SHEET</span>
+      <button id="ref-close-btn" type="button" aria-label="Close Reference">×</button>
+    </div>
+    <img id="ref-img" src="./assets/crystal_reference_6view.jpg" alt="Dragon 6-View Reference Sheet" />
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
