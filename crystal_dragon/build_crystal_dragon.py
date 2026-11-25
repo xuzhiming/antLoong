@@ -17,15 +17,17 @@ import baby_body
 import baby_head
 import baby_limbs
 import baby_wings
+import baby_rig
 
-for mod in (baby_math, baby_materials, baby_body, baby_head, baby_limbs, baby_wings):
+for mod in (baby_math, baby_materials, baby_body, baby_head, baby_limbs, baby_wings, baby_rig):
     importlib.reload(mod)
 
 
 def _setup_clean_scene(scene_name: str = "Crystal Baby Dragon"):
     old_scene = bpy.data.scenes.get(scene_name)
     new_scene = bpy.data.scenes.new(scene_name + "_TMP")
-    bpy.context.window.scene = new_scene
+    if bpy.context.window is not None:
+        bpy.context.window.scene = new_scene
 
     if old_scene is not None:
         old_objs = list(old_scene.objects)
@@ -38,6 +40,8 @@ def _setup_clean_scene(scene_name: str = "Crystal Baby Dragon"):
                 if data is not None and data.users == 0:
                     if isinstance(data, bpy.types.Mesh):
                         bpy.data.meshes.remove(data)
+                    elif isinstance(data, bpy.types.Armature):
+                        bpy.data.armatures.remove(data)
                     elif isinstance(data, bpy.types.Light):
                         bpy.data.lights.remove(data)
                     elif isinstance(data, bpy.types.Camera):
@@ -45,6 +49,10 @@ def _setup_clean_scene(scene_name: str = "Crystal Baby Dragon"):
         for col in old_cols:
             if col.users == 0:
                 bpy.data.collections.remove(col)
+
+    for act in list(bpy.data.actions):
+        if act.users == 0 or act.name.startswith(("Takeoff_And_Fly", "Hover_Fly_Loop")):
+            bpy.data.actions.remove(act, do_unlink=True)
 
     new_scene.name = scene_name
     return new_scene
@@ -105,10 +113,10 @@ def _setup_world_and_studio(scene, studio_col):
         studio_col.objects.link(lobj)
 
     cam_data = bpy.data.cameras.new("Camera_Crystal_Hero_Data")
-    cam_data.lens = 40.0
+    cam_data.lens = 34.0
     cam_obj = bpy.data.objects.new("Camera_Hero", cam_data)
-    cam_obj.location = Vector((-4.2, -5.2, 2.4))
-    _aim_object_at(cam_obj, Vector((0.0, 0.15, 1.15)))
+    cam_obj.location = Vector((-5.8, -7.2, 3.0))
+    _aim_object_at(cam_obj, Vector((0.0, 0.10, 1.60)))
     studio_col.objects.link(cam_obj)
     scene.camera = cam_obj
 
@@ -154,9 +162,17 @@ def build_all():
 
     mins, maxs = _world_bbox(dragon_objs)
     if abs(mins.z) > 1e-4:
-        root.location.z -= mins.z
+        dz = -mins.z
+        for obj in dragon_objs:
+            if obj.type == "MESH":
+                for v in obj.data.vertices:
+                    v.co.z += dz
+                obj.data.update()
         bpy.context.view_layer.update()
         mins, maxs = _world_bbox(dragon_objs)
+
+    rig_obj = baby_rig.build_and_bind_rig(dragon_objs, dragon_col, root)
+    baby_rig.create_flight_animations(rig_obj, scene)
 
     dims = maxs - mins
     print("=== Crystal Baby Dragon Build Summary ===")
@@ -166,6 +182,7 @@ def build_all():
         total_faces += f_cnt
         print(f"  {obj.name:20s} | faces={f_cnt:6d} | mats={[m.name for m in obj.data.materials]}")
     print(f"Total faces: {total_faces}")
+    print(f"Rig: {rig_obj.name} | bones={len(rig_obj.data.bones)} | fps={scene.render.fps} | frames={scene.frame_start}..{scene.frame_end}")
     print(f"World BBox min=({mins.x:.3f}, {mins.y:.3f}, {mins.z:.3f}) max=({maxs.x:.3f}, {maxs.y:.3f}, {maxs.z:.3f})")
     print(f"Dimensions: X={dims.x:.3f}m, Y={dims.y:.3f}m, Z={dims.z:.3f}m")
 
@@ -177,17 +194,25 @@ def build_all():
         for o in s.objects:
             o.select_set(False)
     for o in scene.objects:
-        o.select_set(o in dragon_objs or o == root)
-    bpy.context.view_layer.objects.active = root
+        o.select_set(o in dragon_objs or o in (root, rig_obj))
+    bpy.context.view_layer.objects.active = rig_obj
     glb_path = os.path.join(ROOT_DIR, "crystal_dragon.glb")
     bpy.ops.export_scene.gltf(
         filepath=glb_path,
         export_format="GLB",
         use_selection=True,
         use_active_scene=True,
+        export_animations=True,
+        export_skins=True,
+        export_def_bones=False,
+        export_animation_mode="ACTIONS",
+        export_frame_range=False,
+        export_force_sampling=True,
+        export_anim_slide_to_zero=True,
+        export_rest_position_armature=True,
     )
     print(f"Exported .glb -> {glb_path}")
-    return dragon_objs
+    return dragon_objs, rig_obj
 
 
 if __name__ == "__main__":

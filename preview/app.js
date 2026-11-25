@@ -22,6 +22,9 @@ const bloomSlider = document.getElementById("bloom-slider");
 const bloomVal = document.getElementById("bloom-val");
 const exposureSlider = document.getElementById("exposure-slider");
 const exposureVal = document.getElementById("exposure-val");
+const animControlGroup = document.getElementById("anim-control-group");
+const animClipBtns = document.querySelectorAll("#anim-clips .seg-btn");
+const btnAnimPlay = document.getElementById("btn-anim-play");
 
 function showError(msg) {
   errorText.textContent = msg;
@@ -203,7 +206,7 @@ const MODELS = {
     ringScale: 2.9,
     bloom: { strength: 0.18, threshold: 1.45, exposure: 0.94 },
     presets: {
-      hero:   { pos: new THREE.Vector3(-4.2,  2.5,  5.2), target: new THREE.Vector3(0, 1.15, -0.1) },
+      hero:   { pos: new THREE.Vector3(-5.6,  3.1,  6.8), target: new THREE.Vector3(0, 1.50, -0.05) },
       head:   { pos: new THREE.Vector3( 1.0,  1.85, 3.2), target: new THREE.Vector3(0, 1.82,  1.15) },
       front:  { pos: new THREE.Vector3( 0.0,  1.25, 5.6), target: new THREE.Vector3(0, 1.20, -0.2) },
       rear:   { pos: new THREE.Vector3( 0.0,  1.25,-5.8), target: new THREE.Vector3(0, 1.20, -0.2) },
@@ -256,6 +259,11 @@ let currentView = "hero";
 let userGridEnabled = true;
 let wireframeOn = false;
 let camAnim = null;
+let mixer = null;
+let animActions = {};
+let activeClipName = "Takeoff_And_Fly";
+let animPlaying = true;
+let lastFrameTime = performance.now();
 
 function syncFloorVisibility() {
   floorGroup.visible = userGridEnabled && currentView !== "bottom";
@@ -322,6 +330,43 @@ function disposeModel(root) {
   });
 }
 
+function resetSkinnedRestPose() {
+  if (!activeRoot) return;
+  activeRoot.traverse((obj) => {
+    if (obj.isSkinnedMesh && obj.skeleton) {
+      obj.skeleton.pose();
+    }
+  });
+}
+
+function setAnimationPlaying(playing) {
+  animPlaying = Boolean(playing);
+  btnAnimPlay.classList.toggle("active", animPlaying);
+  btnAnimPlay.textContent = animPlaying ? "Pause Flight" : "Play Flight";
+}
+
+function setAnimationClip(clipName) {
+  activeClipName = clipName;
+  animClipBtns.forEach((b) => {
+    b.classList.toggle("active", b.dataset.clip === clipName);
+  });
+  if (!mixer) return;
+  mixer.stopAllAction();
+  if (clipName === "rest") {
+    resetSkinnedRestPose();
+    setAnimationPlaying(false);
+    return;
+  }
+  const action = animActions[clipName] || Object.values(animActions)[0];
+  if (action) {
+    action.reset();
+    action.setLoop(THREE.LoopRepeat, Infinity);
+    action.play();
+    mixer.update(0);
+    setAnimationPlaying(true);
+  }
+}
+
 const loader = new GLTFLoader();
 let loadToken = 0;
 
@@ -330,6 +375,12 @@ function loadDragonModel(modelKey) {
   if (!cfg) return;
   activeModelKey = modelKey;
   const myToken = ++loadToken;
+  if (mixer) {
+    mixer.stopAllAction();
+    mixer = null;
+  }
+  animActions = {};
+  animControlGroup.classList.add("hidden");
 
   document.querySelectorAll(".model-btn[data-model]").forEach((b) => {
     b.classList.toggle("active", b.dataset.model === modelKey);
@@ -361,7 +412,7 @@ function loadDragonModel(modelKey) {
   loaderOverlay.style.opacity = "1";
 
   loader.load(
-    cfg.glb + "?v=20261124",
+    cfg.glb + "?v=20261125b",
     (gltf) => {
       if (myToken !== loadToken) return;
       disposeModel(activeRoot);
@@ -372,6 +423,7 @@ function loadDragonModel(modelKey) {
       let partCount = 0;
       let triCount = 0;
       model.traverse((obj) => {
+        if (obj.isBone) return;
         const name = obj.name || "";
         let matchedKey = null;
         for (const p of cfg.parts) {
@@ -385,6 +437,9 @@ function loadDragonModel(modelKey) {
           partCount += 1;
         }
         if (obj.isMesh) {
+          if (obj.isSkinnedMesh) {
+            obj.frustumCulled = false;
+          }
           allMeshes.push(obj);
           if (matchedKey) partBuckets[matchedKey].push(obj);
           const geom = obj.geometry;
@@ -402,6 +457,20 @@ function loadDragonModel(modelKey) {
       });
 
       scene.add(model);
+
+      if (gltf.animations && gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(model);
+        gltf.animations.forEach((clip) => {
+          animActions[clip.name] = mixer.clipAction(clip);
+        });
+        animControlGroup.classList.remove("hidden");
+        const defaultClip = animActions.Takeoff_And_Fly ? "Takeoff_And_Fly" : gltf.animations[0].name;
+        setAnimationClip(defaultClip);
+      } else {
+        mixer = null;
+        animActions = {};
+        animControlGroup.classList.add("hidden");
+      }
 
       const box = new THREE.Box3().setFromObject(model);
       const size = new THREE.Vector3();
@@ -459,6 +528,21 @@ document.querySelectorAll("#lighting-presets .seg-btn").forEach((btn) => {
     btn.classList.add("active");
     applyLightingPreset(btn.dataset.preset);
   });
+});
+
+animClipBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setAnimationClip(btn.dataset.clip);
+  });
+});
+
+btnAnimPlay.addEventListener("click", () => {
+  if (!mixer) return;
+  if (activeClipName === "rest") {
+    setAnimationClip(animActions.Takeoff_And_Fly ? "Takeoff_And_Fly" : Object.keys(animActions)[0]);
+  } else {
+    setAnimationPlaying(!animPlaying);
+  }
 });
 
 bloomSlider.addEventListener("input", () => {
@@ -547,7 +631,10 @@ const KEY_VIEW_MAP = {
 };
 window.addEventListener("keydown", (e) => {
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-  if (KEY_VIEW_MAP[e.key]) {
+  if (e.code === "Space" && mixer) {
+    e.preventDefault();
+    btnAnimPlay.click();
+  } else if (KEY_VIEW_MAP[e.key]) {
     setCameraView(KEY_VIEW_MAP[e.key]);
   } else if (e.key === "r" || e.key === "R") {
     setCameraView("hero");
@@ -571,6 +658,11 @@ window.addEventListener("resize", () => {
 
 function animate(now) {
   requestAnimationFrame(animate);
+  const dt = Math.min(0.05, Math.max(0.0, (now - lastFrameTime) / 1000.0));
+  lastFrameTime = now;
+  if (mixer && animPlaying && activeClipName !== "rest") {
+    mixer.update(dt);
+  }
   if (camAnim) {
     const rawT = Math.min(1.0, (now - camAnim.startTime) / camAnim.duration);
     const ease = 1.0 - Math.pow(1.0 - rawT, 3.0);
@@ -581,6 +673,18 @@ function animate(now) {
   controls.update();
   composer.render();
 }
+
+window.__dragonViewer = {
+  getState: () => ({
+    activeModelKey,
+    activeClipName,
+    animPlaying,
+    clips: Object.keys(animActions),
+    skinnedMeshes: allMeshes.filter((m) => m.isSkinnedMesh).length,
+  }),
+  setClip: (name) => setAnimationClip(name),
+  setPlaying: (p) => setAnimationPlaying(p),
+};
 
 // Default load: Crystal Baby Dragon
 loadDragonModel("crystal");
