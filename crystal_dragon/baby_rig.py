@@ -257,6 +257,11 @@ def _bind_all_meshes(dragon_objs, rig_obj):
             for v in verts:
                 weights_by_vert.append(_segment_weights(v.co, spine_segments, power=3.4, eps=0.012, max_influences=3))
 
+        elif name == "Baby_Saddle":
+            saddle_segs = spine_segments[2:5]  # Chest, Spine, Pelvis
+            for v in verts:
+                weights_by_vert.append(_segment_weights(v.co, saddle_segs, power=3.6, eps=0.015, max_influences=3))
+
         elif name == "Baby_Belly_Scutes":
             chin_segs = spine_segments[:2]
             for v in verts:
@@ -271,7 +276,7 @@ def _bind_all_meshes(dragon_objs, rig_obj):
                 p = v.co
                 sfx = "L" if p.x >= 0.0 else "R"
                 kind = "fore" if p.y < -0.25 else "hind"
-                weights_by_vert.append(_segment_weights(p, side_limb_segments[(sfx, kind)], power=3.6, eps=0.006, max_influences=3))
+                weights_by_vert.append(_segment_weights(p, side_limb_segments[(sfx, kind)], power=3.0, eps=0.018, max_influences=3))
 
         elif name == "Baby_Wings":
             for v in verts:
@@ -476,29 +481,138 @@ def _apply_flight_pose(
         _set_world_delta_rot(rig_obj, pbones[f"Hind_Paw.{sfx}"],   Matrix.Rotation(math.radians(hind_pw_deg), 3, axis_pitch_up))
 
 
+def _apply_folded_wings(rig_obj, fold_blend: float, walk_phase: float = 0.0, walk_amp: float = 0.0):
+    """Tuck wings sleekly back along the flanks/back above the haunches and well clear of the floor."""
+    pbones = rig_obj.pose.bones
+    axis_pitch_up = Vector((-1.0, 0.0, 0.0))
+    bounce = walk_amp * math.sin(2.0 * walk_phase)
+
+    sh_flap_deg = -8.0 * fold_blend + 3.0 * bounce
+    sh_sweep_deg = -44.0 * fold_blend - 2.0 * bounce
+    sh_twist_deg = 12.0 * fold_blend
+
+    el_flap_deg = 8.0 * fold_blend + 2.0 * bounce
+    el_sweep_deg = -14.0 * fold_blend
+
+    # Positive flap lifts tips well above the ground and flanks; inner fingers sweep outward (+deg) to clear haunches
+    f_flap_fold = (26.0, 32.0, 38.0, 46.0)
+    f_sweep_fold = (-16.0, 0.0, 16.0, 32.0)
+
+    for s, sfx in ((1.0, "L"), (-1.0, "R")):
+        axis_flap = Vector((0.0, -s, 0.0))
+        axis_sweep = Vector((0.0, 0.0, -s))
+
+        r_sh = (
+            Matrix.Rotation(math.radians(sh_sweep_deg), 3, axis_sweep)
+            @ Matrix.Rotation(math.radians(sh_flap_deg), 3, axis_flap)
+            @ Matrix.Rotation(math.radians(sh_twist_deg), 3, axis_pitch_up)
+        )
+        _set_world_delta_rot(rig_obj, pbones[f"Wing_Shoulder.{sfx}"], r_sh)
+
+        r_el = (
+            Matrix.Rotation(math.radians(el_sweep_deg), 3, axis_sweep)
+            @ Matrix.Rotation(math.radians(el_flap_deg), 3, axis_flap)
+        )
+        _set_world_delta_rot(rig_obj, pbones[f"Wing_Elbow.{sfx}"], r_el)
+
+        for fi, (ff, fs) in enumerate(zip(f_flap_fold, f_sweep_fold), start=1):
+            r_fi = (
+                Matrix.Rotation(math.radians(fs * fold_blend), 3, axis_sweep)
+                @ Matrix.Rotation(math.radians(ff * fold_blend + 2.0 * bounce), 3, axis_flap)
+            )
+            _set_world_delta_rot(rig_obj, pbones[f"Wing_Finger{fi}.{sfx}"], r_fi)
+
+
+def _apply_walk_pose(rig_obj, walk_phase: float, walk_amp: float, fold_blend: float):
+    """Apply grounded quadruped walking gait with wings folded smoothly along the back."""
+    pbones = rig_obj.pose.bones
+    _reset_pose(rig_obj)
+
+    axis_pitch_up = Vector((-1.0, 0.0, 0.0))
+    axis_roll = Vector((0.0, -1.0, 0.0))
+    axis_yaw = Vector((0.0, 0.0, 1.0))
+
+    root_z = walk_amp * (0.032 + 0.022 * abs(math.sin(walk_phase)))
+    _set_world_delta_loc(rig_obj, pbones["Root"], Vector((0.0, 0.0, root_z)))
+
+    # Torso, neck, and head lively walk sway & step bounce
+    s1 = math.sin(walk_phase)
+    c1 = math.cos(walk_phase)
+    c2 = math.cos(2.0 * walk_phase)
+
+    def _rot_ryp(roll_d, yaw_d, pitch_d):
+        return (
+            Matrix.Rotation(math.radians(yaw_d), 3, axis_yaw)
+            @ Matrix.Rotation(math.radians(roll_d), 3, axis_roll)
+            @ Matrix.Rotation(math.radians(pitch_d), 3, axis_pitch_up)
+        )
+
+    _set_world_delta_rot(rig_obj, pbones["Pelvis"], _rot_ryp(2.5 * walk_amp * s1, 4.0 * walk_amp * c1, 1.5 * walk_amp * c2))
+    _set_world_delta_rot(rig_obj, pbones["Spine"], _rot_ryp(-1.5 * walk_amp * s1, -3.0 * walk_amp * c1, 0.0))
+    _set_world_delta_rot(rig_obj, pbones["Chest"], _rot_ryp(-2.5 * walk_amp * s1, -4.0 * walk_amp * c1, 2.5 * walk_amp * abs(s1)))
+
+    head_bob = 4.0 * walk_amp * math.sin(2.0 * walk_phase - 0.5)
+    head_yaw = 4.5 * walk_amp * c1
+    _set_world_delta_rot(rig_obj, pbones["Neck"], _rot_ryp(1.2 * walk_amp * s1, head_yaw * 0.45, head_bob * 0.45))
+    _set_world_delta_rot(rig_obj, pbones["Head"], _rot_ryp(0.0, head_yaw * 0.55, head_bob * 0.55))
+
+    # Cheerful puppy-dragon tail wag
+    for idx, t_name in enumerate(("Tail_01", "Tail_02", "Tail_03", "Tail_04")):
+        t_yaw = walk_amp * (7.0 + idx * 2.8) * math.sin(walk_phase - idx * 0.65)
+        t_pitch = walk_amp * 3.5 * math.cos(2.0 * walk_phase - idx * 0.5)
+        r_tail = Matrix.Rotation(math.radians(t_yaw), 3, axis_yaw) @ Matrix.Rotation(math.radians(-t_pitch), 3, axis_pitch_up)
+        _set_world_delta_rot(rig_obj, pbones[t_name], r_tail)
+
+    # Diagonal 4-beat walk cycle: swinging legs lift forward (+u_deg), keeping lower joints flexed forward
+    # (never un-bending through vertical into the floor!) and paws parallel during stance.
+    leg_phases = (
+        ("L", "Fore", walk_phase),
+        ("R", "Hind", walk_phase + 0.35),
+        ("R", "Fore", walk_phase + math.pi),
+        ("L", "Hind", walk_phase + math.pi + 0.35),
+    )
+    for sfx, kind, p in leg_phases:
+        swing = max(0.0, math.sin(p))
+        stride = -math.cos(p)
+        if kind == "Fore":
+            u_deg = walk_amp * (11.0 * stride + 26.0 * swing)
+            l_deg = walk_amp * (4.0 * stride - 10.0 * swing)
+            p_deg = -(u_deg + l_deg) * 0.92 - walk_amp * 10.0 * swing
+        else:
+            u_deg = walk_amp * (12.0 * stride + 28.0 * swing)
+            l_deg = walk_amp * (5.0 * stride - 8.0 * swing)
+            p_deg = -(u_deg + l_deg) * 0.92 - walk_amp * 10.0 * swing
+
+        _set_world_delta_rot(rig_obj, pbones[f"{kind}_Upper.{sfx}"], Matrix.Rotation(math.radians(u_deg), 3, axis_pitch_up))
+        _set_world_delta_rot(rig_obj, pbones[f"{kind}_Lower.{sfx}"], Matrix.Rotation(math.radians(l_deg), 3, axis_pitch_up))
+        _set_world_delta_rot(rig_obj, pbones[f"{kind}_Paw.{sfx}"],   Matrix.Rotation(math.radians(p_deg), 3, axis_pitch_up))
+
+    _apply_folded_wings(rig_obj, fold_blend=fold_blend, walk_phase=walk_phase, walk_amp=walk_amp)
+
+
 def _bake_takeoff_and_fly(rig_obj):
     act = bpy.data.actions.new("Takeoff_And_Fly")
     act.use_fake_user = True
     _bind_action(rig_obj, act)
 
     period = 24.0
-    frames = sorted(set(list(range(1, 121, 2)) + [1, 12, 14, 24, 32, 48, 72, 96, 102, 120]))
+    key_markers = [1, 12, 14, 24, 32, 96, 112, 126, 144, 160, 170, 180]
+    frames = sorted(set(list(range(1, 181, 2)) + key_markers))
     for f in frames:
-        if f == 1 or f == 120:
+        if f == 1 or f == 180:
             _apply_flight_pose(rig_obj, phase=0.0, wing_amp=0.0, air_blend=0.0, root_z=0.0)
-        else:
-            # Envelopes across 1..120
+        elif f <= 112:
+            # Phase A (1..112): Unfurl -> takeoff -> full-span soaring flight -> landing touchdown at f=112
             air_up = smoothstep(13.0, 30.0, float(f))
-            air_dn = 1.0 - smoothstep(100.0, 118.0, float(f))
+            air_dn = 1.0 - smoothstep(94.0, 111.0, float(f))
             air_blend = air_up * air_dn
 
-            spread_blend = smoothstep(2.0, 14.0, float(f)) * (1.0 - smoothstep(106.0, 119.0, float(f)))
+            spread_blend = smoothstep(2.0, 14.0, float(f)) * (1.0 - smoothstep(98.0, 112.0, float(f)))
             crouch = smoothstep(2.0, 10.0, float(f)) * (1.0 - smoothstep(10.0, 18.0, float(f)))
             prelift = 24.0 * smoothstep(2.0, 13.0, float(f)) * (1.0 - smoothstep(13.0, 21.0, float(f)))
-            landing_flare = smoothstep(98.0, 108.0, float(f)) * (1.0 - smoothstep(108.0, 119.0, float(f)))
+            landing_flare = smoothstep(92.0, 102.0, float(f)) * (1.0 - smoothstep(102.0, 112.0, float(f)))
 
-            wing_env = smoothstep(11.0, 20.0, float(f)) * (1.0 - smoothstep(104.0, 119.0, float(f)))
-            # Start beating smoothly near peak upstroke at f=14 -> full downstroke at f=26 -> cyclic flight
+            wing_env = smoothstep(11.0, 20.0, float(f)) * (1.0 - smoothstep(96.0, 111.0, float(f)))
             phase = ((float(f) - 8.0) / period) * math.tau
             bob = 0.16 * math.sin(phase - 1.25) * wing_env
             root_z = max(0.0, air_blend * 1.12 + bob)
@@ -514,6 +628,15 @@ def _bake_takeoff_and_fly(rig_obj):
                 prelift_deg=prelift,
                 landing_flare=landing_flare,
             )
+        else:
+            # Phase B (113..180): Fold wings smoothly -> cheerful quadruped walk -> unfold back to rest
+            fold_in = smoothstep(112.0, 126.0, float(f))
+            fold_out = 1.0 - smoothstep(170.0, 180.0, float(f))
+            fold_blend = fold_in * fold_out
+
+            walk_amp = smoothstep(124.0, 132.0, float(f)) * (1.0 - smoothstep(162.0, 171.0, float(f)))
+            walk_phase = ((float(f) - 126.0) / 24.0) * math.tau
+            _apply_walk_pose(rig_obj, walk_phase=walk_phase, walk_amp=walk_amp, fold_blend=fold_blend)
 
         _insert_pose_keys(rig_obj, f)
     return act
@@ -541,6 +664,20 @@ def _bake_hover_loop(rig_obj):
     return act
 
 
+def _bake_walk_loop(rig_obj):
+    act = bpy.data.actions.new("Walk_Loop")
+    act.use_fake_user = True
+    _bind_action(rig_obj, act)
+
+    # Exact 2 quadruped strides over frames 1..49 so frame 49 == frame 1 seamlessly
+    frames = sorted(set(list(range(1, 50, 2)) + [1, 49]))
+    for f in frames:
+        walk_phase = ((float(f) - 1.0) / 48.0) * (2.0 * math.tau)
+        _apply_walk_pose(rig_obj, walk_phase=walk_phase, walk_amp=1.0, fold_blend=1.0)
+        _insert_pose_keys(rig_obj, f)
+    return act
+
+
 def build_and_bind_rig(dragon_objs, collection, root):
     """Create Crystal_Dragon_Rig armature and deterministically skin all 12 dragon meshes."""
     rig_obj = _create_armature(collection, root)
@@ -550,24 +687,27 @@ def build_and_bind_rig(dragon_objs, collection, root):
 
 
 def create_flight_animations(rig_obj, scene):
-    """Bake Takeoff_And_Fly (active) and Hover_Fly_Loop (NLA track) onto Crystal_Dragon_Rig."""
+    """Bake Takeoff_And_Fly (active), Hover_Fly_Loop, and Walk_Loop onto Crystal_Dragon_Rig."""
     _reset_pose(rig_obj)
     act_hover = _bake_hover_loop(rig_obj)
+    _reset_pose(rig_obj)
+    act_walk = _bake_walk_loop(rig_obj)
     _reset_pose(rig_obj)
     act_takeoff = _bake_takeoff_and_fly(rig_obj)
 
     ad = rig_obj.animation_data
-    track = ad.nla_tracks.new()
-    track.name = "Hover_Loop_Track"
-    track.mute = True
-    strip = track.strips.new(act_hover.name, 1, act_hover)
-    if hasattr(strip, "action_slot") and hasattr(act_hover, "slots") and len(act_hover.slots) > 0:
-        strip.action_slot = act_hover.slots[0]
+    for idx, act_extra in enumerate((act_hover, act_walk)):
+        track = ad.nla_tracks.new()
+        track.name = f"{act_extra.name}_Track"
+        track.mute = True
+        strip = track.strips.new(act_extra.name, 1 + idx * 100, act_extra)
+        if hasattr(strip, "action_slot") and hasattr(act_extra, "slots") and len(act_extra.slots) > 0:
+            strip.action_slot = act_extra.slots[0]
 
     _bind_action(rig_obj, act_takeoff)
     scene.render.fps = 30
     scene.frame_start = 1
-    scene.frame_end = 120
+    scene.frame_end = 180
     scene.frame_set(1)
     bpy.context.view_layer.update()
-    return act_takeoff, act_hover
+    return act_takeoff, act_hover, act_walk

@@ -17,9 +17,10 @@ import baby_body
 import baby_head
 import baby_limbs
 import baby_wings
+import baby_saddle
 import baby_rig
 
-for mod in (baby_math, baby_materials, baby_body, baby_head, baby_limbs, baby_wings, baby_rig):
+for mod in (baby_math, baby_materials, baby_body, baby_head, baby_limbs, baby_wings, baby_saddle, baby_rig):
     importlib.reload(mod)
 
 
@@ -51,7 +52,7 @@ def _setup_clean_scene(scene_name: str = "Crystal Baby Dragon"):
                 bpy.data.collections.remove(col)
 
     for act in list(bpy.data.actions):
-        if act.users == 0 or act.name.startswith(("Takeoff_And_Fly", "Hover_Fly_Loop")):
+        if act.users == 0 or act.name.startswith(("Takeoff_And_Fly", "Hover_Fly_Loop", "Walk_Loop")):
             bpy.data.actions.remove(act, do_unlink=True)
 
     new_scene.name = scene_name
@@ -156,6 +157,7 @@ def build_all():
     dragon_objs.extend(baby_head.build_head_objects(materials, dragon_col, root))
     dragon_objs.extend(baby_limbs.build_limb_objects(materials, dragon_col, root))
     dragon_objs.append(baby_wings.build_wing_objects(materials, dragon_col, root))
+    dragon_objs.append(baby_saddle.build_saddle_object(materials, dragon_col, root))
 
     _setup_world_and_studio(scene, studio_col)
     bpy.context.view_layer.update()

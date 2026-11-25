@@ -153,13 +153,17 @@ def build_tail_plume():
     return mat
 
 
-def _build_solid_mat(name, base_col, metallic=0.0, roughness=0.35, coat=0.0, em_col=None, em_str=0.0):
+def _build_solid_mat(name, base_col, metallic=0.0, roughness=0.35, coat=0.0, em_col=None, em_str=0.0, sheen=0.0, sheen_tint=None):
     mat, _, bsdf, _ = _get_or_create_material(name)
     mat.diffuse_color = (*base_col, 1.0)
     bsdf.inputs["Base Color"].default_value = (*base_col, 1.0)
     bsdf.inputs["Metallic"].default_value = metallic
     bsdf.inputs["Roughness"].default_value = roughness
     bsdf.inputs["Coat Weight"].default_value = coat
+    if sheen > 0.0:
+        bsdf.inputs["Sheen Weight"].default_value = sheen
+        if sheen_tint is not None:
+            bsdf.inputs["Sheen Tint"].default_value = sheen_tint
     if em_col is not None and em_str > 0.0:
         bsdf.inputs["Emission Color"].default_value = (*em_col, 1.0)
         bsdf.inputs["Emission Strength"].default_value = em_str
@@ -180,6 +184,10 @@ def create_all_materials():
         "tail_plume": build_tail_plume(),
         "pearl_armor": _build_solid_mat("Mat_Pearl_Armor", (0.90, 0.88, 0.95), metallic=0.12, roughness=0.24, coat=0.40),
         "rose_gold": _build_solid_mat("Mat_Rose_Gold", (0.88, 0.66, 0.48), metallic=0.72, roughness=0.25, coat=0.25),
+        "saddle_velvet": _build_solid_mat(
+            "Mat_Saddle_Velvet", (0.26, 0.21, 0.42), metallic=0.02, roughness=0.68, coat=0.04,
+            sheen=0.65, sheen_tint=(0.86, 0.78, 1.0, 1.0),
+        ),
         "ice_cyan_rune": _build_solid_mat(
             "Mat_Ice_Cyan_Rune", (0.06, 0.86, 0.98), metallic=0.0, roughness=0.14,
             em_col=(0.04, 0.88, 1.0), em_str=2.5

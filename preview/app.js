@@ -25,6 +25,7 @@ const exposureVal = document.getElementById("exposure-val");
 const animControlGroup = document.getElementById("anim-control-group");
 const animClipBtns = document.querySelectorAll("#anim-clips .seg-btn");
 const btnAnimPlay = document.getElementById("btn-anim-play");
+const btnSaddle = document.getElementById("btn-saddle");
 
 function showError(msg) {
   errorText.textContent = msg;
@@ -219,6 +220,7 @@ const MODELS = {
       { key: "head",     label: "Head & Horns",   regex: /Head|Eyes|Horns/i },
       { key: "wings",    label: "Wings",          regex: /Wings/i },
       { key: "armor",    label: "Shoulder Armor", regex: /Pauldrons/i },
+      { key: "saddle",   label: "Dragon Saddle",  regex: /Saddle/i },
       { key: "body",     label: "Body & Spines",  regex: /Body|Dorsal_Spines/i },
       { key: "belly",    label: "Belly & Tail",   regex: /Belly_Scutes|Tail_Plume/i },
       { key: "limbs",    label: "Limbs & Paws",   regex: /Limbs|Claws/i },
@@ -263,6 +265,7 @@ let mixer = null;
 let animActions = {};
 let activeClipName = "Takeoff_And_Fly";
 let animPlaying = true;
+let saddleMounted = true;
 let lastFrameTime = performance.now();
 
 function syncFloorVisibility() {
@@ -308,9 +311,13 @@ function rebuildPartCheckboxes(modelCfg) {
     cb.checked = true;
     cb.dataset.part = p.key;
     cb.addEventListener("change", () => {
-      (partBuckets[p.key] || []).forEach((obj) => {
-        obj.visible = cb.checked;
-      });
+      if (p.key === "saddle") {
+        setSaddleMounted(cb.checked);
+      } else {
+        (partBuckets[p.key] || []).forEach((obj) => {
+          obj.visible = cb.checked;
+        });
+      }
     });
     lbl.appendChild(cb);
     lbl.appendChild(document.createTextNode(" " + p.label));
@@ -342,7 +349,20 @@ function resetSkinnedRestPose() {
 function setAnimationPlaying(playing) {
   animPlaying = Boolean(playing);
   btnAnimPlay.classList.toggle("active", animPlaying);
-  btnAnimPlay.textContent = animPlaying ? "Pause Flight" : "Play Flight";
+  btnAnimPlay.textContent = animPlaying ? "Pause Anim" : "Play Anim";
+}
+
+function setSaddleMounted(mounted) {
+  saddleMounted = Boolean(mounted);
+  (partBuckets.saddle || []).forEach((obj) => {
+    obj.visible = saddleMounted;
+  });
+  const cb = partChecksEl.querySelector('input[data-part="saddle"]');
+  if (cb) cb.checked = saddleMounted;
+  if (btnSaddle) {
+    btnSaddle.classList.toggle("active", saddleMounted);
+    btnSaddle.textContent = saddleMounted ? "Saddle: Mounted" : "Saddle: Detached";
+  }
 }
 
 function setAnimationClip(clipName) {
@@ -412,7 +432,7 @@ function loadDragonModel(modelKey) {
   loaderOverlay.style.opacity = "1";
 
   loader.load(
-    cfg.glb + "?v=20261125b",
+    cfg.glb + "?v=20261125d",
     (gltf) => {
       if (myToken !== loadToken) return;
       disposeModel(activeRoot);
@@ -464,6 +484,7 @@ function loadDragonModel(modelKey) {
           animActions[clip.name] = mixer.clipAction(clip);
         });
         animControlGroup.classList.remove("hidden");
+        setSaddleMounted(true);
         const defaultClip = animActions.Takeoff_And_Fly ? "Takeoff_And_Fly" : gltf.animations[0].name;
         setAnimationClip(defaultClip);
       } else {
@@ -544,6 +565,12 @@ btnAnimPlay.addEventListener("click", () => {
     setAnimationPlaying(!animPlaying);
   }
 });
+
+if (btnSaddle) {
+  btnSaddle.addEventListener("click", () => {
+    setSaddleMounted(!saddleMounted);
+  });
+}
 
 bloomSlider.addEventListener("input", () => {
   const v = parseFloat(bloomSlider.value);
@@ -679,11 +706,13 @@ window.__dragonViewer = {
     activeModelKey,
     activeClipName,
     animPlaying,
+    saddleMounted,
     clips: Object.keys(animActions),
     skinnedMeshes: allMeshes.filter((m) => m.isSkinnedMesh).length,
   }),
   setClip: (name) => setAnimationClip(name),
   setPlaying: (p) => setAnimationPlaying(p),
+  setSaddleMounted: (m) => setSaddleMounted(m),
 };
 
 // Default load: Crystal Baby Dragon
