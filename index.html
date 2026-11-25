@@ -57,6 +57,16 @@
       <button id="toggle-panel-btn" type="button" title="Toggle Controls">Collapse</button>
     </div>
     <div id="panel-body" class="panel-body">
+      <section class="control-group hidden" id="anim-control-group">
+        <label class="group-label">Flight Animation</label>
+        <div class="segmented-row" id="anim-clips">
+          <button type="button" class="seg-btn active" data-clip="Takeoff_And_Fly">Takeoff &amp; Fly</button>
+          <button type="button" class="seg-btn" data-clip="Hover_Fly_Loop">Hover Loop</button>
+          <button type="button" class="seg-btn" data-clip="rest">Rest Pose</button>
+        </div>
+        <button id="btn-anim-play" type="button" class="toggle-chip active" style="width:100%;margin-top:6px;">Pause Flight</button>
+      </section>
+
       <section class="control-group">
         <label class="group-label">Lighting Preset</label>
         <div class="segmented-row" id="lighting-presets">
