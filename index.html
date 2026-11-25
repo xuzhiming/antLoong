@@ -58,13 +58,17 @@
     </div>
     <div id="panel-body" class="panel-body">
       <section class="control-group hidden" id="anim-control-group">
-        <label class="group-label">Flight Animation</label>
-        <div class="segmented-row" id="anim-clips">
+        <label class="group-label">Animation &amp; Saddle</label>
+        <div class="segmented-row anim-grid" id="anim-clips">
           <button type="button" class="seg-btn active" data-clip="Takeoff_And_Fly">Takeoff &amp; Fly</button>
           <button type="button" class="seg-btn" data-clip="Hover_Fly_Loop">Hover Loop</button>
+          <button type="button" class="seg-btn" data-clip="Walk_Loop">Walk &amp; Fold</button>
           <button type="button" class="seg-btn" data-clip="rest">Rest Pose</button>
         </div>
-        <button id="btn-anim-play" type="button" class="toggle-chip active" style="width:100%;margin-top:6px;">Pause Flight</button>
+        <div class="toggle-grid" style="margin-top:6px;">
+          <button id="btn-anim-play" type="button" class="toggle-chip active">Pause Anim</button>
+          <button id="btn-saddle" type="button" class="toggle-chip active">Saddle: Mounted</button>
+        </div>
       </section>
 
       <section class="control-group">
